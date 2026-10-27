@@ -12,7 +12,9 @@ from sqlalchemy import func, select, text
 from app.core.config import get_settings
 from app.modules.auth.router import Db
 from app.modules.auth.service import current_user, guard_origin
+from app.modules.demos.comparison import compare, rates
 from app.modules.demos.models import DemoUpload, Match, MatchPlayer, MatchRound
+from app.modules.demos.parser_ids import steam_id
 from app.modules.demos.personalization import personal_result
 from app.modules.game_profiles.models import FaceitProfile, LocalGameProfile, TrackedProfile
 
@@ -177,6 +179,40 @@ def detail(demo_id: uuid.UUID, request: Request, response: Response, db: Db) -> 
                                         "kills": p.kills, "deaths": p.deaths, "assists": p.assists, "headshots": p.headshots} for p in players],
                            "rounds": [{"number": r.number, "winner": r.winner, "tick": r.tick} for r in rounds]}
     return result
+
+
+@router.get("/{demo_id}/comparison")
+def comparison(demo_id: uuid.UUID, request: Request, response: Response, db: Db, player_id: uuid.UUID) -> dict:
+    job = owned(db, request, demo_id)
+    response.headers["Cache-Control"] = "no-store"
+    match = db.scalar(select(Match).where(Match.demo_id == job.id))
+    if not match or job.status != "completed":
+        raise HTTPException(404, "Analysis unavailable")
+    player = db.scalar(select(MatchPlayer).where(MatchPlayer.match_id == match.id, MatchPlayer.id == player_id))
+    if not player:
+        raise HTTPException(404, "Player not found")
+    sid = steam_id(player.steam_id64)
+    if not sid:
+        return {"metrics": compare(None, []), "source": "personal_history"}
+    count = db.scalar(select(func.count()).select_from(MatchPlayer).where(MatchPlayer.match_id == match.id, MatchPlayer.steam_id64 == sid))
+    current = rates(match.facts, sid) if count == 1 and match.analysis_version == "competitive-2" else None
+    history = []
+    seen = {job.checksum} if job.checksum else set()
+    if job.checksum:
+        entries = db.execute(select(DemoUpload, Match).join(Match, Match.demo_id == DemoUpload.id).where(
+            DemoUpload.owner_id == job.owner_id, DemoUpload.status == "completed", DemoUpload.created_at < job.created_at,
+            Match.analysis_version == "competitive-2").order_by(DemoUpload.created_at.desc(), DemoUpload.id)).all()
+        for past, previous in entries:
+            if not past.checksum or past.checksum in seen:
+                continue
+            ids = db.scalars(select(MatchPlayer.steam_id64).where(MatchPlayer.match_id == previous.id, MatchPlayer.steam_id64 == sid)).all()
+            if len(ids) != 1:
+                continue
+            row = rates(previous.facts, sid)
+            if row is not None:
+                seen.add(past.checksum)
+                history.append(row)
+    return {"metrics": compare(current, history), "source": "personal_history"}
 
 
 @router.get("/{demo_id}/diagnostics")

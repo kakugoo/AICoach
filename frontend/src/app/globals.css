@@ -152,3 +152,6 @@ p { text-wrap: pretty; }
 .local-profile-form select { width:100%; min-height:44px; color:var(--text-primary); background:var(--surface-elevated); border:1px solid var(--border); border-radius:8px; padding:8px 12px; }
 .local-profile-form select:focus-visible { outline:2px solid var(--accent-primary); outline-offset:3px; }
 .local-profile-form .button { justify-self:start; }
+.comparison-below { border-color:var(--danger); }.comparison-below strong { color:var(--danger); }
+.comparison-usual { border-color:var(--success); }.comparison-usual strong { color:var(--success); }
+.comparison-above { border-color:var(--accent-primary); }.comparison-above strong { color:var(--accent-primary); }
