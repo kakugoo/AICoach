@@ -4,7 +4,9 @@ from numbers import Integral
 
 from demoparser2 import DemoParser
 
-from app.modules.demos.competitive import ANALYSIS_VERSION, normalize
+from app.core.config import get_settings
+from app.modules.demos.advanced import calculate
+from app.modules.demos.competitive import ANALYSIS_VERSION, integer, normalize
 from app.modules.demos.parser_ids import steam_id
 
 
@@ -44,6 +46,27 @@ def parse_demo(path: str) -> dict:
         deaths = deaths_frame.to_dict("records")
         starts, announcements, restarts, panels, ticks_data, warmups, prestarts = [], [], [], [], [], [], []
     player_list, rounds, score, facts = normalize(list(players.values()), deaths, starts, announcements, restarts, panels, ticks_data, warmups, prestarts)
+    if rounds:
+        try:
+            ends = parser.parse_event("round_end").to_dict("records")
+            hurts = parser.parse_event("player_hurt", player=["team_num"]).to_dict("records")
+            disconnects = parser.parse_event("player_disconnect").to_dict("records")
+            snapshot_ticks = sorted({r["start_tick"] for r in rounds} | {
+                int(e["tick"]) for e in ends if isinstance(e.get("tick"), Integral)})
+            snapshots = parser.parse_ticks(["team_num", "is_alive", "health"], ticks=snapshot_ticks).to_dict("records")
+            facts["advanced"] = calculate(player_list, facts, snapshots, ends, hurts, disconnects,
+                                          trade_window_ticks=get_settings().demo_trade_window_ticks)
+            facts["advanced_source"] = {
+                "hurt": [{"tick": integer(h.get("tick")), "attacker": steam_id(h.get("attacker_steamid")),
+                          "victim": steam_id(h.get("user_steamid")), "damage_health": integer(h.get("dmg_health")),
+                          "health": integer(h.get("health")), "attacker_team": integer(h.get("attacker_team_num")),
+                          "victim_team": integer(h.get("user_team_num"))} for h in hurts],
+                "disconnects": [{"tick": integer(e.get("tick")), "player": steam_id(e.get("user_steamid"))}
+                                for e in disconnects],
+            }
+        except (KeyError, TypeError, ValueError, AttributeError):
+            # Advanced analysis is optional; never compromise the established result.
+            facts["advanced"] = {"version": "advanced-1", "players": {}, "rounds": []}
     stored_rounds = [{"number": r["number"], "winner": r["winner"], "tick": r["tick"]} for r in rounds]
     return {"map_name": map_name, "score": score, "parser_version": version("demoparser2"),
             "analysis_version": ANALYSIS_VERSION, "players": player_list, "rounds": stored_rounds, "facts": facts}

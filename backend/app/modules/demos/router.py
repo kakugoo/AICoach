@@ -136,6 +136,7 @@ def detail(demo_id: uuid.UUID, request: Request, response: Response, db: Db) -> 
         result["match"] = {"id": str(match.id), "map_name": match.map_name, "score": match.score,
                            "parser_version": match.parser_version, "analysis_version": match.analysis_version,
                            "competitive_rounds": len(match.facts.get("rounds", [])),
+                           "advanced": match.facts.get("advanced"),
                            "round_context": match.facts.get("rounds", []),
                            "players": [{"id": str(p.id), "name": p.name, "steam_id64": p.steam_id64, "team": p.team,
                                         "kills": p.kills, "deaths": p.deaths, "assists": p.assists, "headshots": p.headshots} for p in players],

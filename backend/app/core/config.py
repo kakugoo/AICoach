@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     demo_max_uncompressed_bytes: int = 1073741824
     demo_quota_bytes: int = 4294967296
     demo_timeout_seconds: int = 600
+    demo_trade_window_ticks: int = Field(default=320, ge=1, le=10000)
     cookie_secure: bool = False
     allowed_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
