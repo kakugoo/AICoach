@@ -12,6 +12,7 @@ dependencies = [
   "pwdlib[argon2]>=0.3,<1",
   "email-validator>=2,<3",
   "httpx>=0.28,<1",
+  "demoparser2==0.42.0",
 ]
 
 [project.optional-dependencies]

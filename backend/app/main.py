@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from app.api.health import router
 from app.core.config import get_settings
 from app.modules.auth.router import router as auth_router
+from app.modules.demos.router import router as demos_router
 from app.modules.game_profiles.router import router as game_profiles_router
 
 app = FastAPI(title="CS2 Analytics API", version="0.1.0")
@@ -19,6 +20,7 @@ app.add_middleware(
 app.include_router(router)
 app.include_router(auth_router)
 app.include_router(game_profiles_router)
+app.include_router(demos_router)
 
 
 @app.exception_handler(RequestValidationError)

@@ -3,6 +3,7 @@ from sqlalchemy import create_engine
 
 from app.core.config import get_settings
 from app.modules.auth.models import Base
+from app.modules.demos import models as demo_models  # noqa: F401
 from app.modules.game_profiles import models as game_profile_models  # noqa: F401
 
 config = context.config
