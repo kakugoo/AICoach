@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     faceit_api_key: str | None = Field(default=None, repr=False)
     demo_storage_dir: str = "../storage/demos"
     demo_max_bytes: int = 1073741824
+    demo_max_uncompressed_bytes: int = 1073741824
     demo_quota_bytes: int = 4294967296
     demo_timeout_seconds: int = 600
     cookie_secure: bool = False

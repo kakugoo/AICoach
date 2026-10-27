@@ -15,6 +15,7 @@ class DemoUpload(Base):
     storage_name: Mapped[str] = mapped_column(String(64), unique=True)
     checksum: Mapped[str | None] = mapped_column(String(64), nullable=True)
     size_bytes: Mapped[int] = mapped_column(BigInteger)
+    work_bytes: Mapped[int] = mapped_column(BigInteger, server_default="0")
     status: Mapped[str] = mapped_column(String(20), index=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

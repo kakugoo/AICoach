@@ -105,6 +105,34 @@ def test_real_cs2_demo():
     path = Path(os.environ["CS2_TEST_DEMO"])
     result = parse_demo(str(path))
     assert result["map_name"] and result["players"]
+    if os.environ.get("CS2_TEST_FACEIT_REFERENCE") == "1":
+        import hashlib
+        import json
+
+        reference_path = Path(os.environ.get("CS2_TEST_REFERENCE", "../storage/fixtures/faceit-reference.json"))
+        if not reference_path.is_file():
+            pytest.skip("Private real-match reference fixture not available")
+        reference = json.loads(reference_path.read_text(encoding="utf-8"))
+        got = {p["name"]: (p["kills"], p["deaths"], p["assists"]) for p in result["players"]}
+        assert all(got[name] == tuple(value) for name, value in reference["players"].items())
+        assert sorted(team["score"] for team in result["score"]["teams"]) == reference["score_sorted"]
+        baseline = {
+            "players": sorted((p["steam_id64"], p["team"], p["kills"], p["deaths"], p["assists"])
+                              for p in result["players"]),
+            "score": result["score"],
+            "rounds": result["facts"]["rounds"],
+        }
+        encoded = json.dumps(baseline, sort_keys=True, ensure_ascii=True, separators=(",", ":")).encode()
+        assert hashlib.sha256(encoded).hexdigest() == reference["baseline_sha256"]
+        target = next(player for player in result["players"] if player["name"] == reference["target"])
+        if "advanced" in result["facts"]:
+            advanced = result["facts"]["advanced"]["players"][target["steam_id64"]]
+            for key, expected_value in reference["advanced"].items():
+                assert advanced[key] == expected_value
+        if "utility_economy" in result["facts"]:
+            utility = result["facts"]["utility_economy"]["players"][target["steam_id64"]]
+            for key, expected_value in reference["utility"].items():
+                assert (utility["uses"][key] if key in utility["uses"] else utility[key]) == expected_value
 
 
 def test_corrupt_file_fails_in_real_worker_and_is_retryable(client):
@@ -148,10 +176,9 @@ def test_event_statistics_are_labeled_recording_facts(monkeypatch):
     monkeypatch.setattr(module, "DemoParser", FakeParser)
     result = module.parse_demo("test-only.dem")
     assert result["score"] is None
-    assert result["players"][0]["kills"] == 1 and result["players"][0]["headshots"] == 1
-    assert result["players"][1]["deaths"] == 1
-    assert result["rounds"] == [{"number": 1, "winner": "CT", "tick": 60}]
-    assert result["facts"]["event_scope"] == "all_recorded_events_may_include_warmup"
+    assert result["players"][0]["kills"] is None
+    assert result["rounds"] == []
+    assert result["facts"]["phases"][0]["phase"] == "unknown"
 
 
 def test_timeout_leaves_no_partial_match(client, monkeypatch):
@@ -163,3 +190,63 @@ def test_timeout_leaves_no_partial_match(client, monkeypatch):
     assert run_one(engine())
     result = client.get(f"/demos/{demo_id}").json()
     assert result["demo"]["status"] == "failed" and result["match"] is None
+
+
+@pytest.mark.skipif(not os.environ.get("CS2_TEST_DEMO"), reason="No real CS2 demo supplied")
+def test_real_zstd_upload_worker_and_retry(client, tmp_path, monkeypatch):
+    import zstandard
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "demo_max_bytes", 1073741824)
+    monkeypatch.setattr(settings, "demo_max_uncompressed_bytes", 1073741824)
+    monkeypatch.setattr(settings, "demo_quota_bytes", 2147483648)
+    source = Path(os.environ["CS2_TEST_DEMO"])
+    archive = tmp_path / "fixture" / "real-fixture.dem.zst"
+    archive.parent.mkdir()
+    with source.open("rb") as raw, archive.open("wb") as compressed:
+        zstandard.ZstdCompressor(level=3).copy_stream(raw, compressed)
+    assert register(client).status_code == 201
+    uploaded = client.post("/demos?filename=fixture.dem.zst", content=archive.read_bytes(),
+                           headers={"Content-Type": "application/octet-stream"})
+    assert uploaded.status_code == 201, uploaded.text
+    demo_id = uploaded.json()["id"]
+    assert run_one(engine())
+    result = client.get(f"/demos/{demo_id}").json()
+    assert result["demo"]["status"] == "completed", result
+    assert result["match"]["analysis_version"] == "competitive-2"
+    assert result["match"]["map_name"]
+    assert not list(Path(settings.demo_storage_dir).glob("*.unpacked"))
+    assert len(list(Path(settings.demo_storage_dir).glob("*.dem.zst"))) == 1
+    assert client.post(f"/demos/{demo_id}/retry").status_code == 200
+    assert run_one(engine())
+    result2 = client.get(f"/demos/{demo_id}").json()
+    assert result2["demo"]["status"] == "completed"
+    assert len(result2["match"]["players"]) == len(result["match"]["players"])
+
+
+def test_failed_reanalysis_preserves_prior_rows_and_original(client):
+    from sqlalchemy import select
+
+    from app.modules.demos.models import Match, MatchPlayer
+
+    assert register(client).status_code == 201
+    demo_id = upload(client).json()["id"]
+    assert run_one(engine(), runner=lambda path: RESULT)
+    diagnostic = client.get(f"/demos/{demo_id}/diagnostics")
+    assert diagnostic.status_code == 200
+    assert client.post(f"/demos/{demo_id}/retry").status_code == 200
+    def failure(path):
+        raise ValueError("failed reanalysis")
+    assert run_one(engine(), runner=failure)
+    assert client.get(f"/demos/{demo_id}").json()["demo"]["status"] == "failed"
+    with Session(engine()) as db:
+        match = db.scalar(select(Match).where(Match.demo_id == __import__("uuid").UUID(demo_id)))
+        assert match and len(db.scalars(select(MatchPlayer).where(MatchPlayer.match_id == match.id)).all()) == 1
+        job = db.get(DemoUpload, __import__("uuid").UUID(demo_id))
+        assert (Path(get_settings().demo_storage_dir) / job.storage_name).is_file()
+    assert client.post(f"/demos/{demo_id}/retry").status_code == 200
+    assert run_one(engine(), runner=lambda path: RESULT)
+    with Session(engine()) as db:
+        matches = db.scalars(select(Match).where(Match.demo_id == __import__("uuid").UUID(demo_id))).all()
+        assert len(matches) == 1
+        assert len(db.scalars(select(MatchPlayer).where(MatchPlayer.match_id == matches[0].id)).all()) == 1
