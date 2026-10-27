@@ -35,3 +35,9 @@ The UI font stack prefers Inter and falls back to local system sans-serif; numer
 ## Analytics rules
 
 Never present invented match statistics, player history or AI recommendations. Unavailable capabilities use an explicit “В разработке” state rather than fake controls. Keep objective data, heuristic findings and model assumptions distinguishable, show units and provenance where appropriate, and prioritize legible tables over decorative charts. Preserve current authorization, API contracts and accessible form behavior when extending the UI.
+
+## Analytics experience
+
+The match view keeps the selected player while switching accessible tabs. The overview shows concise numerical cards; duels, rounds, CT/T and trades are disclosed separately. Unknown values use a dash and an explanation, never invented zeroes. Tab buttons expose ARIA roles, selected state and arrow-key navigation. On narrow screens tab bars and tables scroll locally; the page itself should not overflow. Use tabular figures, meaningful labels and plain explanations of formulas. Keep loading, empty and error states actionable and preserve reduced-motion preferences.
+
+The external landing-page reference in `docs/design-references/` informs hierarchy, consistent spacing, complete interaction states and concise copy. Its proposed font prohibition, palette, floating navigation, marketing-specific sections and mandatory scroll animation do not override Tactical Intelligence or the needs of an analytics workspace.

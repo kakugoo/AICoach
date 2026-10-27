@@ -51,3 +51,9 @@ K/D is kills divided by deaths when deaths > 0; K/D difference is kills minus de
 A trade is an enemy kill by a teammate of a victim against that victim's killer, strictly later in the same round and within `DEMO_TRADE_WINDOW_TICKS` (default 320). Same-tick order is not inferred. This is an event-based heuristic; it does not prove player intention and 320 ticks represents five seconds only when the recording uses 64 ticks per second. Time conversion is not inferred from the demo. CT/T aggregates use the verified side at each freeze end, including side changes. K/D/A in advanced rounds stop at `round_end`; historical `competitive-2` values remain unchanged even where its boundary rules differ.
 
 The engine currently requires a full roster and has not been independently validated against FACEIT ADR, KAST, trade definitions or multiple demos. Overtime, substitutions, ambiguous identities, unusual phase behavior and disconnected players need further real-match verification; no tactical error or recommendation is inferred.
+
+## Overview and analytics UI
+
+`GET /demos/summary` authenticates the current user, joins only that user's uploads with their match records, and returns counts and the latest five records. It does not expose a saved analysis while its job is incomplete. The overview refreshes periodically and re-fetches after returning from the match list; no additional database table or migration is required. The player dashboard reads the existing owner-protected detail API once and switches tabs locally.
+
+A `.zst` filename is accepted alongside `.dem.zst`: the API still requires the Zstandard magic and stores a random internal `.dem.zst` filename. The worker retains bounded, single-frame decompression, verifies the CS2 demo signature and deletes temporary copies. A valid Zstandard header alone does not prove the archive contains a valid CS2 demo; that is checked asynchronously by the worker.

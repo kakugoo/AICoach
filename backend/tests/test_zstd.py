@@ -26,6 +26,15 @@ def test_zstd_upload_and_bounded_decode(client, tmp_path):
     assert response.status_code == 201 and response.json()["status"] == "queued"
 
 
+def test_zst_extension_requires_zstandard_signature(client):
+    assert register(client).status_code == 201
+    blob = zstandard.ZstdCompressor().compress(b"PBDEMS2\x00" + b"test")
+    assert client.post("/demos?filename=match.zst", content=blob,
+                       headers={"Content-Type": "application/octet-stream"}).status_code == 201
+    assert client.post("/demos?filename=invalid.zst", content=b"PBDEMS2\x00invalid",
+                       headers={"Content-Type": "application/octet-stream"}).status_code == 422
+
+
 def test_corruption_size_and_signature(tmp_path):
     data = b"PBDEMS2\x00" + b"x" * 1000
     blob = zstandard.ZstdCompressor().compress(data)

@@ -92,6 +92,22 @@ def test_processing_error_and_retry(client):
         assert db.get(DemoUpload, __import__("uuid").UUID(demo_id)).checksum
 
 
+def test_summary_reflects_owned_matches_and_deletion(client):
+    assert client.get("/demos/summary").status_code == 401
+    assert register(client).status_code == 201
+    assert client.get("/demos/summary").json()["total"] == 0
+    demo_id = upload(client).json()["id"]
+    assert client.get("/demos/summary").json()["processing"] == 1
+    assert run_one(engine(), runner=lambda path: RESULT)
+    summary = client.get("/demos/summary").json()
+    assert summary["completed"] == 1 and summary["recent"][0]["map_name"] == "test_map"
+    with TestClient(app, base_url="http://localhost:8000", headers=HEADERS) as other:
+        assert register(other, "summary-other@example.com").status_code == 201
+        assert other.get("/demos/summary").json()["total"] == 0
+    assert client.delete(f"/demos/{demo_id}").status_code == 204
+    assert client.get("/demos/summary").json()["total"] == 0
+
+
 def test_real_parser_rejects_corrupt_demo(tmp_path):
     path = tmp_path / "invalid.dem"
     path.write_bytes(MAGIC)
@@ -203,10 +219,15 @@ def test_real_zstd_upload_worker_and_retry(client, tmp_path, monkeypatch):
     source = Path(os.environ["CS2_TEST_DEMO"])
     archive = tmp_path / "fixture" / "real-fixture.dem.zst"
     archive.parent.mkdir()
-    with source.open("rb") as raw, archive.open("wb") as compressed:
-        zstandard.ZstdCompressor(level=3).copy_stream(raw, compressed)
+    real_archive = os.environ.get("CS2_TEST_ARCHIVE")
+    if real_archive:
+        import shutil
+        shutil.copyfile(real_archive, archive)
+    else:
+        with source.open("rb") as raw, archive.open("wb") as compressed:
+            zstandard.ZstdCompressor(level=3).copy_stream(raw, compressed)
     assert register(client).status_code == 201
-    uploaded = client.post("/demos?filename=fixture.dem.zst", content=archive.read_bytes(),
+    uploaded = client.post("/demos?filename=fixture.zst", content=archive.read_bytes(),
                            headers={"Content-Type": "application/octet-stream"})
     assert uploaded.status_code == 201, uploaded.text
     demo_id = uploaded.json()["id"]

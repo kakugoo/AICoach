@@ -56,9 +56,9 @@ async def upload(request: Request, db: Db, filename: Annotated[str, Query(min_le
     safe_name = filename.replace("\\", "/").split("/")[-1]
     if any(ord(char) < 32 for char in safe_name):
         raise HTTPException(422, "Invalid filename")
-    compressed = safe_name.lower().endswith(".dem.zst")
+    compressed = safe_name.lower().endswith(".zst")
     if not (safe_name.lower().endswith(".dem") or compressed) or len(safe_name) < 5:
-        raise HTTPException(415, "Only .dem and .dem.zst files are supported")
+        raise HTTPException(415, "Only .dem, .dem.zst and .zst files are supported")
     length = request.headers.get("content-length", "")
     if not length.isascii() or not length.isdigit():
         raise HTTPException(411, "Content length required")
@@ -122,6 +122,21 @@ def list_demos(request: Request, response: Response, db: Db) -> list[DemoUpload]
     user = current_user(db, request)
     response.headers["Cache-Control"] = "no-store"
     return list(db.scalars(select(DemoUpload).where(DemoUpload.owner_id == user.id).order_by(DemoUpload.created_at.desc())))
+
+
+@router.get("/summary")
+def demo_summary(request: Request, response: Response, db: Db) -> dict:
+    user = current_user(db, request)
+    response.headers["Cache-Control"] = "no-store"
+    rows = db.execute(select(DemoUpload, Match).outerjoin(Match, Match.demo_id == DemoUpload.id)
+                      .where(DemoUpload.owner_id == user.id).order_by(DemoUpload.created_at.desc())).all()
+    return {"total": len(rows), "completed": sum(job.status == "completed" for job, _ in rows),
+            "processing": sum(job.status in ("uploaded", "queued", "processing") for job, _ in rows),
+            "failed": sum(job.status == "failed" for job, _ in rows),
+            "recent": [{"id": str(job.id), "created_at": job.created_at.isoformat(), "status": job.status,
+                        "map_name": match.map_name if match and job.status == "completed" else None,
+                        "score": match.score if match and job.status == "completed" else None,
+                        "original_name": job.original_name} for job, match in rows[:5]]}
 
 
 @router.get("/{demo_id}")

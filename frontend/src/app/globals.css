@@ -110,3 +110,26 @@ p { text-wrap: pretty; }
 /* Demo uploads and match facts */
 .demo-upload { padding: 24px; display: grid; gap: 22px; max-width: 1020px; }.demo-upload h2,.demo-section-title h2 { font-size: 19px; }.demo-upload p,.demo-section-title p,.demo-muted,.demo-info p,.demo-player p { color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin-top: 7px; }.demo-upload-form { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }.demo-upload-form label { font-weight: 600; }.demo-upload-form input { max-width: 100%; color: var(--text-secondary); }.demo-upload-form input::file-selector-button { background: var(--surface-elevated); color: var(--text-primary); border: 1px solid var(--border); border-radius: 6px; padding: 10px; cursor: pointer; margin-right: 12px; }.demo-progress { display: flex; align-items: center; gap: 14px; color: var(--text-secondary); font-size: 14px; }.demo-progress progress { accent-color: var(--accent-primary); max-width: 60%; }.demo-section-title { margin: 40px 0 18px; }.demo-list { display: grid; gap: 12px; }.demo-row { display: flex; gap: 20px; align-items: center; padding: 20px; }.demo-row-info { flex: 1; min-width: 0; }.demo-row-info strong { display: block; overflow-wrap: anywhere; }.demo-row-info span,.demo-meta { display: block; color: var(--text-secondary); font-size: 12px; margin-top: 5px; }.demo-error { color: var(--danger); margin-top: 8px; font-size: 13px; }.demo-row-actions { display: flex; gap: 8px; }.demo-info,.demo-player { padding: 20px; margin-top: 20px; }.demo-table-card { overflow: hidden; }.demo-table { width: 100%; border-collapse: collapse; min-width: 600px; text-align: left; }.demo-table th,.demo-table td { border-bottom: 1px solid var(--border); padding: 14px 18px; font-size: 14px; }.demo-table th { color: var(--text-secondary); font-weight: 600; }.demo-table td:not(:first-child) { font-family: var(--font-mono); }.player-select { color: var(--accent-primary); background: none; border: 0; text-align: left; text-decoration: underline; text-underline-offset: 3px; }.player-select[aria-pressed="true"] { color: var(--text-primary); }.demo-player h3 { font-size: 16px; }
 @media(max-width: 700px) { .demo-row { flex-wrap: wrap; }.demo-row-info { flex-basis: 100%; }.demo-row-actions { margin-left: auto; }.demo-upload-form { align-items: stretch; flex-direction: column; }.demo-upload-form input { width: 100%; } }
+
+/* Match analytics and real dashboard summary */
+.overview-actions { display:flex; flex-wrap:wrap; gap:12px; margin-bottom:32px; }
+.summary-grid,.stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr)); gap:12px; }
+.summary-grid .card { display:flex; flex-direction:column; gap:8px; }
+.summary-grid span,.stat-card span,.stat-card small { color:var(--text-secondary); }
+.summary-grid strong,.stat-card strong { font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:1.5rem; color:var(--text-primary); }
+.overview-note { margin-top:24px; }
+.analytics-section { margin:32px 0; }
+.analytics-tabs { display:flex; overflow-x:auto; gap:4px; border-bottom:1px solid var(--border); margin-bottom:24px; }
+.analytics-tabs button { color:var(--text-secondary); border:0; background:transparent; padding:12px 16px; min-height:44px; white-space:nowrap; cursor:pointer; }
+.analytics-tabs button[aria-selected="true"] { color:var(--accent-primary); box-shadow:inset 0 -2px var(--accent-primary); }
+.analytics-tabs button:hover { background:var(--surface-elevated); }
+.analytics-tabs button:focus-visible { outline:2px solid var(--accent-primary); outline-offset:-3px; }
+.stat-grid { margin:16px 0 24px; }
+.stat-card { display:flex; flex-direction:column; gap:8px; padding:16px; background:var(--surface); border:1px solid var(--border); border-radius:12px; }
+.stat-card small { line-height:1.4; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior:auto !important; transition-duration:0.01ms !important; animation-duration:0.01ms !important; } }
+.player-picker { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:24px 0; }
+.player-picker select { min-height:44px; max-width:100%; padding:8px 12px; color:var(--text-primary); background:var(--surface-elevated); border:1px solid var(--border); border-radius:8px; }
+.player-picker select:focus-visible,.match-extra summary:focus-visible { outline:2px solid var(--accent-primary); outline-offset:3px; }
+.match-extra { margin:32px 0; }
+.match-extra summary { cursor:pointer; color:var(--text-secondary); padding:12px 0; }
