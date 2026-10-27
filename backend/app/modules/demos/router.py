@@ -13,9 +13,17 @@ from app.core.config import get_settings
 from app.modules.auth.router import Db
 from app.modules.auth.service import current_user, guard_origin
 from app.modules.demos.models import DemoUpload, Match, MatchPlayer, MatchRound
+from app.modules.demos.personalization import personal_result
+from app.modules.game_profiles.models import FaceitProfile, TrackedProfile
 
 router = APIRouter(prefix="/demos", tags=["demos"])
 MAGIC = b"PBDEMS2\x00"
+
+
+def primary_steam(db: Db, user_id: uuid.UUID) -> str | None:
+    return db.scalar(select(FaceitProfile.steam_id64).join(
+        TrackedProfile, TrackedProfile.profile_id == FaceitProfile.id).where(
+            TrackedProfile.user_id == user_id, TrackedProfile.is_primary.is_(True)))
 
 
 class DemoOut(BaseModel):
@@ -130,12 +138,18 @@ def demo_summary(request: Request, response: Response, db: Db) -> dict:
     response.headers["Cache-Control"] = "no-store"
     rows = db.execute(select(DemoUpload, Match).outerjoin(Match, Match.demo_id == DemoUpload.id)
                       .where(DemoUpload.owner_id == user.id).order_by(DemoUpload.created_at.desc())).all()
+    steam = primary_steam(db, user.id)
+    match_ids = [match.id for job, match in rows[:5] if match and job.status == "completed"]
+    players = db.scalars(select(MatchPlayer).where(MatchPlayer.match_id.in_(match_ids))).all() if match_ids else []
     return {"total": len(rows), "completed": sum(job.status == "completed" for job, _ in rows),
             "processing": sum(job.status in ("uploaded", "queued", "processing") for job, _ in rows),
             "failed": sum(job.status == "failed" for job, _ in rows),
             "recent": [{"id": str(job.id), "created_at": job.created_at.isoformat(), "status": job.status,
                         "map_name": match.map_name if match and job.status == "completed" else None,
                         "score": match.score if match and job.status == "completed" else None,
+                        "personal": personal_result(steam, [p for p in players if p.match_id == match.id],
+                                                    match.score, match.analysis_version)
+                                    if match and job.status == "completed" else None,
                         "original_name": job.original_name} for job, match in rows[:5]]}
 
 
@@ -149,6 +163,8 @@ def detail(demo_id: uuid.UUID, request: Request, response: Response, db: Db) -> 
         players = db.scalars(select(MatchPlayer).where(MatchPlayer.match_id == match.id)).all()
         rounds = db.scalars(select(MatchRound).where(MatchRound.match_id == match.id).order_by(MatchRound.number)).all()
         result["match"] = {"id": str(match.id), "map_name": match.map_name, "score": match.score,
+                           "personal": personal_result(primary_steam(db, job.owner_id), players, match.score,
+                                                       match.analysis_version),
                            "parser_version": match.parser_version, "analysis_version": match.analysis_version,
                            "competitive_rounds": len(match.facts.get("rounds", [])),
                            "advanced": match.facts.get("advanced"),

@@ -126,3 +126,41 @@ def test_timeout_and_invalid_payload(client):
     assert client.get("/game-profiles/search?nickname=example_player").status_code == 502
     app.dependency_overrides[get_faceit_client] = lambda: mock_client(payload={"nickname": "broken"})
     assert client.get("/game-profiles/search?nickname=example_player").status_code == 502
+
+
+def test_primary_profile_selection_is_owner_scoped_without_key(client):
+    app.dependency_overrides[get_faceit_client] = mock_client
+    assert register(client).status_code == 201
+    profile_id = client.post("/game-profiles", json={"faceit_player_id": PLAYER_ID}).json()["id"]
+    app.dependency_overrides[get_faceit_client] = lambda: FaceitClient(api_key="")
+    assert client.post(f"/game-profiles/{profile_id}/primary").status_code == 204
+    assert client.get("/game-profiles").json()[0]["is_primary"] is True
+    with TestClient(app, base_url="http://localhost:8000", headers=HEADERS) as other:
+        assert register(other, "primary-other@example.com").status_code == 201
+        assert other.post(f"/game-profiles/{profile_id}/primary").status_code == 404
+        assert other.delete(f"/game-profiles/{profile_id}/primary").status_code == 404
+    assert client.delete(f"/game-profiles/{profile_id}/primary").status_code == 204
+    assert client.get("/game-profiles").json()[0]["is_primary"] is False
+    assert client.post(f"/game-profiles/{profile_id}/primary").status_code == 204
+    assert client.delete(f"/game-profiles/{profile_id}").status_code == 204
+    assert client.get("/game-profiles").json() == []
+
+
+def test_switch_primary_and_keep_other_tracking(client):
+    from datetime import UTC, datetime
+
+    app.dependency_overrides[get_faceit_client] = mock_client
+    assert register(client).status_code == 201
+    first = client.post("/game-profiles", json={"faceit_player_id": PLAYER_ID}).json()["id"]
+    with next(app.dependency_overrides[get_db]()) as db:
+        tracked = db.scalar(select(TrackedProfile))
+        second = FaceitProfile(faceit_player_id=uuid.uuid4(), nickname="second", profile_url="https://www.faceit.com/en/players/second", updated_at=datetime.now(UTC))
+        db.add(second)
+        db.flush()
+        second_id = str(second.id)
+        db.add(TrackedProfile(user_id=tracked.user_id, profile_id=second.id))
+        db.commit()
+    assert client.post(f"/game-profiles/{first}/primary").status_code == 204
+    assert client.post(f"/game-profiles/{second_id}/primary").status_code == 204
+    profiles = client.get("/game-profiles").json()
+    assert {p["id"]: p["is_primary"] for p in profiles} == {first: False, second_id: True}

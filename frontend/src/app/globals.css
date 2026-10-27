@@ -133,3 +133,14 @@ p { text-wrap: pretty; }
 .player-picker select:focus-visible,.match-extra summary:focus-visible { outline:2px solid var(--accent-primary); outline-offset:3px; }
 .match-extra { margin:32px 0; }
 .match-extra summary { cursor:pointer; color:var(--text-secondary); padding:12px 0; }
+.summary-grid .card { min-height:112px; padding:20px; justify-content:space-between; }
+.summary-grid strong { font-size:2rem; line-height:1.1; }
+.overview-match { display:flex; flex-direction:column; gap:8px; width:100%; text-align:left; padding:20px 24px; background:var(--surface); color:var(--text-primary); border:1px solid var(--border); border-radius:12px; cursor:pointer; }
+.overview-match:hover { background:var(--surface-elevated); }
+.overview-match:active { transform:translateY(1px); }
+.overview-match:focus-visible { outline:2px solid var(--accent-primary); outline-offset:3px; }
+.overview-match-static { cursor:default; }
+.overview-match-main { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px; }
+.overview-score { font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:1.6rem; }
+.overview-score.win { color:var(--success); }.overview-score.loss { color:var(--danger); }
+.overview-map,.overview-match-meta { color:var(--text-secondary); }

@@ -271,3 +271,35 @@ def test_failed_reanalysis_preserves_prior_rows_and_original(client):
         matches = db.scalars(select(Match).where(Match.demo_id == __import__("uuid").UUID(demo_id))).all()
         assert len(matches) == 1
         assert len(db.scalars(select(MatchPlayer).where(MatchPlayer.match_id == matches[0].id)).all()) == 1
+
+
+def test_summary_personalizes_score_and_reacts_to_primary_change(client):
+    from datetime import UTC, datetime
+
+    from sqlalchemy import select
+
+    from app.modules.auth.models import User
+    from app.modules.game_profiles.models import FaceitProfile, TrackedProfile
+
+    assert register(client).status_code == 201
+    demo_id = upload(client).json()["id"]
+    synthetic = RESULT | {"analysis_version": "competitive-2", "score": {"teams": [{"name": "A", "score": 5}, {"name": "B", "score": 13}]},
+                          "players": [RESULT["players"][0] | {"steam_id64": "76561198000000000", "team": "B"}]}
+    assert run_one(engine(), runner=lambda path: synthetic)
+    with Session(engine()) as db:
+        user = db.scalar(select(User))
+        profile = FaceitProfile(faceit_player_id=__import__("uuid").uuid4(), nickname="renamed",
+                                steam_id64="76561198000000000", profile_url="https://www.faceit.com/en/players/renamed", updated_at=datetime.now(UTC))
+        db.add(profile)
+        db.flush()
+        profile_id = str(profile.id)
+        db.add(TrackedProfile(user_id=user.id, profile_id=profile.id))
+        db.commit()
+    assert client.get("/demos/summary").json()["recent"][0]["personal"]["outcome"] is None
+    assert client.post(f"/game-profiles/{profile_id}/primary").status_code == 204
+    recent = client.get("/demos/summary").json()["recent"][0]
+    assert recent["personal"]["score"] == [13, 5] and recent["personal"]["outcome"] == "win"
+    detail = client.get(f"/demos/{demo_id}").json()["match"]
+    assert detail["personal"]["player_id"] == detail["players"][0]["id"]
+    assert client.delete(f"/game-profiles/{profile_id}/primary").status_code == 204
+    assert client.get("/demos/summary").json()["recent"][0]["personal"]["score"] is None

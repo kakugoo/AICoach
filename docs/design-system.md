@@ -41,3 +41,7 @@ Never present invented match statistics, player history or AI recommendations. U
 The match view keeps the selected player while switching accessible tabs. The overview shows concise numerical cards; duels, rounds, CT/T and trades are disclosed separately. Unknown values use a dash and an explanation, never invented zeroes. Tab buttons expose ARIA roles, selected state and arrow-key navigation. On narrow screens tab bars and tables scroll locally; the page itself should not overflow. Use tabular figures, meaningful labels and plain explanations of formulas. Keep loading, empty and error states actionable and preserve reduced-motion preferences.
 
 The external landing-page reference in `docs/design-references/` informs hierarchy, consistent spacing, complete interaction states and concise copy. Its proposed font prohibition, palette, floating navigation, marketing-specific sections and mandatory scroll animation do not override Tactical Intelligence or the needs of an analytics workspace.
+
+## Personalized match cards
+
+Score appears first in a large tabular typeface with the map as secondary text and a separately labeled upload date. A confirmed win uses `success`, a confirmed loss uses `danger`, and a draw or unknown outcome uses neutral text; every outcome has a text label. The complete card is a keyboard-accessible button when a completed report is available. Summary cards use uniform internal spacing and flexible grids.
