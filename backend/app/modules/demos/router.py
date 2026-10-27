@@ -171,6 +171,7 @@ def detail(demo_id: uuid.UUID, request: Request, response: Response, db: Db) -> 
                            "parser_version": match.parser_version, "analysis_version": match.analysis_version,
                            "competitive_rounds": len(match.facts.get("rounds", [])),
                            "advanced": match.facts.get("advanced"),
+                           "utility_economy": {k: v for k, v in match.facts.get("utility_economy", {}).items() if k not in ("events", "source", "source_smoke")} or None,
                            "round_context": match.facts.get("rounds", []),
                            "players": [{"id": str(p.id), "name": p.name, "steam_id64": p.steam_id64, "team": p.team,
                                         "kills": p.kills, "deaths": p.deaths, "assists": p.assists, "headshots": p.headshots} for p in players],

@@ -1,6 +1,7 @@
 """Extract raw events and conservative competitive facts from a CS2 demo."""
+import math
 from importlib.metadata import version
-from numbers import Integral
+from numbers import Integral, Real
 
 from demoparser2 import DemoParser
 
@@ -8,6 +9,7 @@ from app.core.config import get_settings
 from app.modules.demos.advanced import calculate
 from app.modules.demos.competitive import ANALYSIS_VERSION, integer, normalize
 from app.modules.demos.parser_ids import steam_id
+from app.modules.demos.utility_economy import calculate as calculate_utility_economy
 
 
 def parse_demo(path: str) -> dict:
@@ -67,6 +69,40 @@ def parse_demo(path: str) -> dict:
         except (KeyError, TypeError, ValueError, AttributeError):
             # Advanced analysis is optional; never compromise the established result.
             facts["advanced"] = {"version": "advanced-1", "players": {}, "rounds": []}
+        try:
+            shots = parser.parse_event("weapon_fire", player=["team_num"]).to_dict("records")
+            blinds = parser.parse_event("player_blind", player=["team_num"]).to_dict("records")
+            equipment = parser.parse_ticks(["team_num", "is_alive", "balance", "current_equip_value",
+                "cash_spent_this_round", "armor_value", "has_helmet", "has_defuser", "inventory"],
+                ticks=[r["start_tick"] for r in rounds]).to_dict("records")
+            if len(shots) + len(blinds) + len(hurts) > 200000:
+                raise ValueError("Too many events for utility analysis")
+            facts["utility_economy"] = calculate_utility_economy(player_list, facts, shots, blinds, hurts, equipment, disconnects)
+            facts["utility_economy"]["source"] = {
+                "weapon_fire": [{"tick": integer(e.get("tick")), "player": steam_id(e.get("user_steamid")),
+                                 "team": integer(e.get("user_team_num")), "weapon": e.get("weapon")}
+                                for e in shots if e.get("weapon") in (
+                                    "weapon_flashbang", "weapon_smokegrenade", "weapon_hegrenade",
+                                    "weapon_molotov", "weapon_incgrenade", "weapon_decoy")],
+                "grenade_hurt": [{"tick": integer(e.get("tick")), "attacker": steam_id(e.get("attacker_steamid")),
+                                  "victim": steam_id(e.get("user_steamid")), "weapon": e.get("weapon"),
+                                  "damage_health": integer(e.get("dmg_health")), "health": integer(e.get("health"))}
+                                 for e in hurts if e.get("weapon") in ("hegrenade", "inferno")],
+                "player_blind": [{"tick": integer(e.get("tick")), "attacker": steam_id(e.get("attacker_steamid")),
+                                  "victim": steam_id(e.get("user_steamid")), "entity": integer(e.get("entityid")),
+                                  "duration": float(e["blind_duration"]) if isinstance(e.get("blind_duration"), Real)
+                                  and math.isfinite(e["blind_duration"]) else None} for e in blinds],
+            }
+            smoke = []
+            for event_type in ("smokegrenade_detonate", "smokegrenade_expired"):
+                frame = parser.parse_event(event_type, player=["team_num"])
+                if hasattr(frame, "to_dict"):
+                    smoke.extend({"type": event_type, "tick": integer(e.get("tick")),
+                                  "player": steam_id(e.get("user_steamid")), "entity": integer(e.get("entityid"))}
+                                 for e in frame.to_dict("records"))
+            facts["utility_economy"]["source_smoke"] = smoke
+        except Exception:  # noqa: BLE001 - optional parser features must not break existing analytics
+            facts["utility_economy"] = {"version": "utility-economy-1", "players": {}, "rounds": []}
     stored_rounds = [{"number": r["number"], "winner": r["winner"], "tick": r["tick"]} for r in rounds]
     return {"map_name": map_name, "score": score, "parser_version": version("demoparser2"),
             "analysis_version": ANALYSIS_VERSION, "players": player_list, "rounds": stored_rounds, "facts": facts}
