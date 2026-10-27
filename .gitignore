@@ -14,3 +14,20 @@ storage/*
 *.tsbuildinfo
 .env.*
 !.env.example
+
+# Local demos, databases, backups and credentials must not enter Git.
+*.dem
+*.dem.zst
+*.zst
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.dump
+*.backup
+*.sql
+*.sql.gz
+*.pem
+*.key
