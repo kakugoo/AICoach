@@ -144,3 +144,11 @@ p { text-wrap: pretty; }
 .overview-score { font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:1.6rem; }
 .overview-score.win { color:var(--success); }.overview-score.loss { color:var(--danger); }
 .overview-map,.overview-match-meta { color:var(--text-secondary); }
+.local-profile-section { margin-bottom:32px; }
+.local-profile-card { display:grid; gap:16px; padding:24px; }
+.local-profile-current,.local-profile-form { display:grid; gap:12px; }
+.local-profile-current span { color:var(--text-secondary); overflow-wrap:anywhere; }
+.local-profile-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.local-profile-form select { width:100%; min-height:44px; color:var(--text-primary); background:var(--surface-elevated); border:1px solid var(--border); border-radius:8px; padding:8px 12px; }
+.local-profile-form select:focus-visible { outline:2px solid var(--accent-primary); outline-offset:3px; }
+.local-profile-form .button { justify-self:start; }

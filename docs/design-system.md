@@ -45,3 +45,5 @@ The external landing-page reference in `docs/design-references/` informs hierarc
 ## Personalized match cards
 
 Score appears first in a large tabular typeface with the map as secondary text and a separately labeled upload date. A confirmed win uses `success`, a confirmed loss uses `danger`, and a draw or unknown outcome uses neutral text; every outcome has a text label. The complete card is a keyboard-accessible button when a completed report is available. Summary cards use uniform internal spacing and flexible grids.
+
+Local profile selection reuses form controls, cards and status badges. Show the demo-derived nickname and Steam ID64, identify the source as a demo, and state that selecting an identity does not prove ownership. Keep the FACEIT and local choices visible when switching the active source.

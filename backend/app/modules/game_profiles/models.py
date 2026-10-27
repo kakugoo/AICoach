@@ -28,3 +28,11 @@ class TrackedProfile(Base):
     profile_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("faceit_profiles.id", ondelete="CASCADE"), primary_key=True)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+
+
+class LocalGameProfile(Base):
+    __tablename__ = "local_game_profiles"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    steam_id64: Mapped[str] = mapped_column(String(20), nullable=False)
+    nickname: Mapped[str] = mapped_column(String(128), nullable=False)
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))

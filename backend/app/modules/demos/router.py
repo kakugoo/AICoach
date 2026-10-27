@@ -14,13 +14,16 @@ from app.modules.auth.router import Db
 from app.modules.auth.service import current_user, guard_origin
 from app.modules.demos.models import DemoUpload, Match, MatchPlayer, MatchRound
 from app.modules.demos.personalization import personal_result
-from app.modules.game_profiles.models import FaceitProfile, TrackedProfile
+from app.modules.game_profiles.models import FaceitProfile, LocalGameProfile, TrackedProfile
 
 router = APIRouter(prefix="/demos", tags=["demos"])
 MAGIC = b"PBDEMS2\x00"
 
 
 def primary_steam(db: Db, user_id: uuid.UUID) -> str | None:
+    local = db.get(LocalGameProfile, user_id)
+    if local and local.is_primary:
+        return local.steam_id64
     return db.scalar(select(FaceitProfile.steam_id64).join(
         TrackedProfile, TrackedProfile.profile_id == FaceitProfile.id).where(
             TrackedProfile.user_id == user_id, TrackedProfile.is_primary.is_(True)))

@@ -4,14 +4,16 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from app.modules.auth.models import User
 from app.modules.auth.router import Db
 from app.modules.auth.service import current_user, guard_origin, limit_attempts
+from app.modules.demos.models import DemoUpload, Match, MatchPlayer
+from app.modules.demos.parser_ids import steam_id
 from app.modules.game_profiles.client import FaceitClient, Player, get_faceit_client
-from app.modules.game_profiles.models import FaceitProfile, TrackedProfile
+from app.modules.game_profiles.models import FaceitProfile, LocalGameProfile, TrackedProfile
 
 router = APIRouter(prefix="/game-profiles", tags=["game profiles"])
 Client = Annotated[FaceitClient, Depends(get_faceit_client)]
@@ -19,6 +21,11 @@ Client = Annotated[FaceitClient, Depends(get_faceit_client)]
 
 class AddProfile(BaseModel):
     faceit_player_id: uuid.UUID
+
+
+class LocalSelection(BaseModel):
+    demo_id: uuid.UUID
+    player_id: uuid.UUID
 
 
 class SavedProfile(Player):
@@ -52,6 +59,68 @@ def saved(profile: FaceitProfile, added_at: datetime, is_primary: bool = False) 
 def status(request: Request, db: Db, client: Client) -> dict[str, bool]:
     current_user(db, request)
     return {"configured": bool(client.api_key)}
+
+
+@router.get("/local")
+def get_local(request: Request, response: Response, db: Db) -> dict | None:
+    user = current_user(db, request)
+    response.headers["Cache-Control"] = "no-store"
+    local = db.get(LocalGameProfile, user.id)
+    if not local:
+        return None
+    return {"nickname": local.nickname, "steam_id64": local.steam_id64, "is_primary": local.is_primary}
+
+
+@router.post("/local", status_code=204)
+def set_local(data: LocalSelection, request: Request, db: Db) -> None:
+    guard_origin(request)
+    user = current_user(db, request)
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    player = db.scalar(select(MatchPlayer).join(Match, MatchPlayer.match_id == Match.id).join(
+        DemoUpload, Match.demo_id == DemoUpload.id).where(
+        DemoUpload.id == data.demo_id, DemoUpload.owner_id == user.id,
+        DemoUpload.status == "completed", MatchPlayer.id == data.player_id))
+    if not player:
+        raise HTTPException(404, "Player in completed owned demo not found")
+    sid = steam_id(player.steam_id64)
+    if not sid:
+        raise HTTPException(422, "Player has no valid Steam ID64")
+    duplicates = db.scalar(select(func.count()).select_from(MatchPlayer).where(
+        MatchPlayer.match_id == player.match_id, MatchPlayer.steam_id64 == sid))
+    if duplicates != 1:
+        raise HTTPException(422, "Player identity is ambiguous")
+    db.execute(update(TrackedProfile).where(TrackedProfile.user_id == user.id).values(is_primary=False))
+    local = db.get(LocalGameProfile, user.id)
+    if local:
+        local.steam_id64, local.nickname, local.is_primary = sid, player.name, True
+    else:
+        db.add(LocalGameProfile(user_id=user.id, steam_id64=sid, nickname=player.name, is_primary=True))
+    db.commit()
+
+
+@router.post("/local/primary", status_code=204)
+def activate_local(request: Request, db: Db) -> None:
+    guard_origin(request)
+    user = current_user(db, request)
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    local = db.get(LocalGameProfile, user.id)
+    if not local:
+        raise HTTPException(404, "Local profile not found")
+    db.execute(update(TrackedProfile).where(TrackedProfile.user_id == user.id).values(is_primary=False))
+    local.is_primary = True
+    db.commit()
+
+
+@router.delete("/local", status_code=204)
+def delete_local(request: Request, db: Db) -> None:
+    guard_origin(request)
+    user = current_user(db, request)
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    local = db.get(LocalGameProfile, user.id)
+    if not local:
+        raise HTTPException(404, "Local profile not found")
+    db.delete(local)
+    db.commit()
 
 
 @router.get("/search", response_model=Player)
@@ -120,6 +189,9 @@ def set_primary(profile_id: uuid.UUID, request: Request, db: Db) -> None:
     tracked = db.get(TrackedProfile, (user.id, profile_id))
     if not tracked:
         raise HTTPException(404, "Tracked profile not found")
+    local = db.get(LocalGameProfile, user.id)
+    if local:
+        local.is_primary = False
     db.execute(update(TrackedProfile).where(TrackedProfile.user_id == user.id).values(is_primary=False))
     db.execute(update(TrackedProfile).where(TrackedProfile.user_id == user.id,
                                            TrackedProfile.profile_id == profile_id).values(is_primary=True))
