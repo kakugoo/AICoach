@@ -129,9 +129,11 @@ def test_real_cs2_demo():
         if not reference_path.is_file():
             pytest.skip("Private real-match reference fixture not available")
         reference = json.loads(reference_path.read_text(encoding="utf-8"))
+        expected = reference["players"]
         got = {p["name"]: (p["kills"], p["deaths"], p["assists"]) for p in result["players"]}
-        assert all(got[name] == tuple(value) for name, value in reference["players"].items())
+        assert all(got[name] == tuple(value) for name, value in expected.items())
         assert sorted(team["score"] for team in result["score"]["teams"]) == reference["score_sorted"]
+        # Regression baseline, not an independent FACEIT verification of every field.
         baseline = {
             "players": sorted((p["steam_id64"], p["team"], p["kills"], p["deaths"], p["assists"])
                               for p in result["players"]),
@@ -141,14 +143,12 @@ def test_real_cs2_demo():
         encoded = json.dumps(baseline, sort_keys=True, ensure_ascii=True, separators=(",", ":")).encode()
         assert hashlib.sha256(encoded).hexdigest() == reference["baseline_sha256"]
         target = next(player for player in result["players"] if player["name"] == reference["target"])
-        if "advanced" in result["facts"]:
-            advanced = result["facts"]["advanced"]["players"][target["steam_id64"]]
-            for key, expected_value in reference["advanced"].items():
-                assert advanced[key] == expected_value
-        if "utility_economy" in result["facts"]:
-            utility = result["facts"]["utility_economy"]["players"][target["steam_id64"]]
-            for key, expected_value in reference["utility"].items():
-                assert (utility["uses"][key] if key in utility["uses"] else utility[key]) == expected_value
+        advanced = result["facts"]["advanced"]["players"][target["steam_id64"]]
+        for key, expected_value in reference["advanced"].items():
+            assert advanced[key] == expected_value
+        utility = result["facts"]["utility_economy"]["players"][target["steam_id64"]]
+        for key, expected_value in reference["utility"].items():
+            assert (utility["uses"][key] if key in utility["uses"] else utility[key]) == expected_value
 
 
 def test_corrupt_file_fails_in_real_worker_and_is_retryable(client):
